@@ -370,7 +370,7 @@ body::before {
     gap: var(--spacing-xs);
 }
 
-.btn-cleanup {
+.btn-cleanup, .btn-clear-chat, .btn-clear-dice {
     background: linear-gradient(135deg, #4c566a, #5e81ac);
     color: white;
     padding: var(--spacing-xs) var(--spacing-sm);
@@ -385,9 +385,17 @@ body::before {
     font-weight: 600;
 }
 
-.btn-cleanup:hover {
+.btn-cleanup:hover, .btn-clear-chat:hover, .btn-clear-dice:hover {
     background: linear-gradient(135deg, #5e81ac, #4c566a);
     transform: translateY(-1px);
+}
+
+.btn-clear-chat, .btn-clear-dice {
+    background: linear-gradient(135deg, #bf616a, #d08770);
+}
+
+.btn-clear-chat:hover, .btn-clear-dice:hover {
+    background: linear-gradient(135deg, #d08770, #bf616a);
 }
 
 .btn-leave {

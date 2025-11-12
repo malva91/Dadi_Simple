@@ -99,6 +99,10 @@ class TavernaDeiCaniDiOdino {
     this.playerNameInput = document.getElementById('playerName');
     this.roomCodeInput = document.getElementById('roomCode');
 
+    // Clear buttons
+    this.clearChatBtn = document.getElementById('clearChat');
+    this.clearDiceBtn = document.getElementById('clearDice');
+
     // Game
     this.currentRoomSpan = document.getElementById('currentRoom');
     this.leaveRoomBtn = document.getElementById('leaveRoom');
@@ -127,6 +131,9 @@ class TavernaDeiCaniDiOdino {
     const debouncedSend = debounce(() => this.sendChatMessage(), 120);
     this.sendMessageBtn.addEventListener('click', debouncedSend);
     this.chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') debouncedSend(); });
+
+    this.clearChatBtn.addEventListener('click', () => this.clearChat());
+    this.clearDiceBtn.addEventListener('click', () => this.clearDiceResults());
 
     // Delegation: rimozione riga dadi
     this.diceRows.addEventListener('click', (e) => {
@@ -187,23 +194,22 @@ class TavernaDeiCaniDiOdino {
       this.diceResultsRef = this.roomRef.child('diceResults');
       this.chatRef = this.roomRef.child('chat');
 
-      // Assegnazione colore utente (transazione idempotente)
-      let userColor = savedUserColor;
-      if (!userColor) {
-        const colorRef = this.roomRef.child('availableColors');
-        await colorRef.transaction(colors => {
-          if (!Array.isArray(colors) || colors.length === 0) {
-            colors = [...this.colorPalette];
-          }
-          colors = Array.from(new Set(colors));
-          const pick = colors.length ? colors[cryptoInt(colors.length)] : this.colorPalette[cryptoInt(this.colorPalette.length)];
-          userColor = pick;
-          return colors.filter(c => c !== pick);
-        });
-        localStorage.setItem(`taverna_${roomCode}_userColor`, userColor);
-      }
+      // Assegnazione colore utente (transazione con rimozione colore dall'array)
+      let userColor = null;
+      const colorRef = this.roomRef.child('availableColors');
+      await colorRef.transaction(colors => {
+        if (!Array.isArray(colors) || colors.length === 0) {
+          colors = [...this.colorPalette];
+        }
+        colors = Array.from(new Set(colors));
+        const pick = colors.length ? colors[cryptoInt(colors.length)] : this.colorPalette[cryptoInt(this.colorPalette.length)];
+        userColor = pick;
+        return colors.filter(c => c !== pick);
+      });
+
       this.currentUser.color = userColor;
       localStorage.setItem(`taverna_${roomCode}_userId`, this.currentUser.id);
+      localStorage.setItem(`taverna_${roomCode}_userColor`, userColor);
 
       // Sessione (salvo dopo l'esito positivo)
       // Scrittura utente con timestamp server
@@ -534,6 +540,8 @@ class TavernaDeiCaniDiOdino {
   async removeUserFromRoom() {
     if (this.usersRef && this.currentUser) {
       try {
+        await this.usersRef.child(this.currentUser.id).remove();
+
         if (this.currentUser.color) {
           const colorRef = this.roomRef.child('availableColors');
           await colorRef.transaction(colors => {
@@ -541,10 +549,10 @@ class TavernaDeiCaniDiOdino {
             if (!colors.includes(this.currentUser.color)) colors.push(this.currentUser.color);
             return colors;
           });
-          localStorage.removeItem(`taverna_${this.currentRoom}_userId`);
-          localStorage.removeItem(`taverna_${this.currentRoom}_userColor`);
         }
-        await this.usersRef.child(this.currentUser.id).remove();
+
+        localStorage.removeItem(`taverna_${this.currentRoom}_userId`);
+        localStorage.removeItem(`taverna_${this.currentRoom}_userColor`);
       } catch (e) {
         console.error('Errore nella rimozione utente:', e);
       }
@@ -557,13 +565,12 @@ class TavernaDeiCaniDiOdino {
       const snapshot = await this.usersRef.once('value');
       const users = snapshot.val() || {};
       const now = Date.now();
-      const timeout = 24 * 60 * 60 * 1000; // 24h
+      const timeout = 24 * 60 * 60 * 1000;
 
       for (const [userId, user] of Object.entries(users)) {
         if (!user || userId === (this.currentUser && this.currentUser.id)) continue;
         const lastSeen = Number(user.lastSeen || 0);
         if (!Number.isFinite(lastSeen) || now - lastSeen > timeout) {
-          await this.usersRef.child(userId).remove();
           if (user.color) {
             const colorRef = this.roomRef.child('availableColors');
             await colorRef.transaction(colors => {
@@ -572,10 +579,31 @@ class TavernaDeiCaniDiOdino {
               return colors;
             });
           }
+          await this.usersRef.child(userId).remove();
         }
       }
     } catch (e) {
       console.error('Errore nella pulizia utenti:', e);
+    }
+  }
+
+  async clearChat() {
+    if (!this.chatRef) return;
+    try {
+      await this.chatRef.remove();
+      this.chatMessages.innerHTML = '';
+    } catch (e) {
+      console.error('Errore nella pulizia chat:', e);
+    }
+  }
+
+  async clearDiceResults() {
+    if (!this.diceResultsRef) return;
+    try {
+      await this.diceResultsRef.remove();
+      this.diceResults.innerHTML = '';
+    } catch (e) {
+      console.error('Errore nella pulizia risultati dadi:', e);
     }
   }
 
