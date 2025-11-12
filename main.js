@@ -198,13 +198,12 @@ class TavernaDeiCaniDiOdino {
       let userColor = null;
       const colorRef = this.roomRef.child('availableColors');
       await colorRef.transaction(colors => {
-        if (!Array.isArray(colors) || colors.length === 0) {
-          colors = [...this.colorPalette];
-        }
-        colors = Array.from(new Set(colors));
-        const pick = colors.length ? colors[cryptoInt(colors.length)] : this.colorPalette[cryptoInt(this.colorPalette.length)];
-        userColor = pick;
-        return colors.filter(c => c !== pick);
+        let available = Array.isArray(colors) ? [...colors] : [...this.colorPalette];
+        available = Array.from(new Set(available));
+        if (available.length === 0) available = [...this.colorPalette];
+        const idx = cryptoInt(available.length);
+        userColor = available[idx];
+        return available.filter((_, i) => i !== idx);
       });
 
       this.currentUser.color = userColor;
@@ -305,14 +304,22 @@ class TavernaDeiCaniDiOdino {
 
   // ======= RENDER / UI =======
   updateUsersList(users) {
+    if (!users || typeof users !== 'object') {
+      this.headerUsersList.innerHTML = '';
+      return;
+    }
+    const validUsers = Object.values(users).filter(u => u && u.name && u.color);
+    if (validUsers.length === 0) {
+      this.headerUsersList.innerHTML = '';
+      return;
+    }
     this.headerUsersList.innerHTML = '';
-    Object.values(users).forEach(user => {
+    validUsers.forEach(user => {
       const badge = document.createElement('div');
       badge.className = 'user-badge';
       badge.style.backgroundColor = user.color;
       badge.style.color = textOn(user.color);
-      const safeName = this.escapeHtml(user.name ?? '—');
-      badge.textContent = `🐺 ${safeName}`;
+      badge.textContent = `🐺 ${this.escapeHtml(user.name)}`;
       this.headerUsersList.appendChild(badge);
     });
   }
@@ -538,24 +545,23 @@ class TavernaDeiCaniDiOdino {
 
   // ======= PRESENZA / CLEANUP =======
   async removeUserFromRoom() {
-    if (this.usersRef && this.currentUser) {
-      try {
-        await this.usersRef.child(this.currentUser.id).remove();
+    if (!this.usersRef || !this.currentUser) return;
+    try {
+      this.usersRef.child(this.currentUser.id).remove().catch(e => console.error('Errore rimozione:', e));
 
-        if (this.currentUser.color) {
-          const colorRef = this.roomRef.child('availableColors');
-          await colorRef.transaction(colors => {
-            if (!Array.isArray(colors)) colors = [];
-            if (!colors.includes(this.currentUser.color)) colors.push(this.currentUser.color);
-            return colors;
-          });
-        }
-
-        localStorage.removeItem(`taverna_${this.currentRoom}_userId`);
-        localStorage.removeItem(`taverna_${this.currentRoom}_userColor`);
-      } catch (e) {
-        console.error('Errore nella rimozione utente:', e);
+      if (this.currentUser.color && this.roomRef) {
+        const colorRef = this.roomRef.child('availableColors');
+        colorRef.transaction(colors => {
+          if (!Array.isArray(colors)) colors = [];
+          if (!colors.includes(this.currentUser.color)) colors.push(this.currentUser.color);
+          return colors;
+        }).catch(e => console.error('Errore colore:', e));
       }
+
+      localStorage.removeItem(`taverna_${this.currentRoom}_userId`);
+      localStorage.removeItem(`taverna_${this.currentRoom}_userColor`);
+    } catch (e) {
+      console.error('Errore rimozione utente:', e);
     }
   }
 
@@ -566,45 +572,46 @@ class TavernaDeiCaniDiOdino {
       const users = snapshot.val() || {};
       const now = Date.now();
       const timeout = 24 * 60 * 60 * 1000;
+      const disconnected = [];
 
       for (const [userId, user] of Object.entries(users)) {
         if (!user || userId === (this.currentUser && this.currentUser.id)) continue;
         const lastSeen = Number(user.lastSeen || 0);
         if (!Number.isFinite(lastSeen) || now - lastSeen > timeout) {
-          if (user.color) {
-            const colorRef = this.roomRef.child('availableColors');
-            await colorRef.transaction(colors => {
-              if (!Array.isArray(colors)) colors = [];
-              if (!colors.includes(user.color)) colors.push(user.color);
-              return colors;
-            });
-          }
-          await this.usersRef.child(userId).remove();
+          disconnected.push({userId, color: user.color});
+        }
+      }
+
+      if (disconnected.length === 0) return;
+
+      for (const {userId, color} of disconnected) {
+        this.usersRef.child(userId).remove().catch(e => console.error('Errore rimozione:', e));
+        if (color && this.roomRef) {
+          const colorRef = this.roomRef.child('availableColors');
+          colorRef.transaction(colors => {
+            if (!Array.isArray(colors)) colors = [];
+            if (!colors.includes(color)) colors.push(color);
+            return colors;
+          }).catch(e => console.error('Errore colore:', e));
         }
       }
     } catch (e) {
-      console.error('Errore nella pulizia utenti:', e);
+      console.error('Errore pulizia utenti:', e);
     }
   }
 
-  async clearChat() {
-    if (!this.chatRef) return;
-    try {
-      await this.chatRef.remove();
-      this.chatMessages.innerHTML = '';
-    } catch (e) {
-      console.error('Errore nella pulizia chat:', e);
+  clearChat() {
+    if (this.chatRef) {
+      this.chatRef.remove().catch(e => console.error('Errore pulizia chat:', e));
     }
+    this.chatMessages.innerHTML = '';
   }
 
-  async clearDiceResults() {
-    if (!this.diceResultsRef) return;
-    try {
-      await this.diceResultsRef.remove();
-      this.diceResults.innerHTML = '';
-    } catch (e) {
-      console.error('Errore nella pulizia risultati dadi:', e);
+  clearDiceResults() {
+    if (this.diceResultsRef) {
+      this.diceResultsRef.remove().catch(e => console.error('Errore pulizia dadi:', e));
     }
+    this.diceResults.innerHTML = '';
   }
 
   // ======= HELPERS =======
