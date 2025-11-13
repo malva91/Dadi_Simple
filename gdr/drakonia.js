@@ -5,43 +5,43 @@ export const drakonia = {
     facilissimo: {
       label: 'Facilissimo',
       dice: '4d6',
-      effects: [
-        { use: 'highlightHighest', params: { count: 2 } },
-        { use: 'checkDoubleSixOnHighlighted' },
+      effetti: [
+        { usa: 'evidenziaAlti', parametri: { conteggio: 2 } },
+        { usa: 'controllaDoppioSei' },
       ],
     },
     facile: {
       label: 'Facile',
       dice: '3d6',
-      effects: [
-        { use: 'highlightHighest', params: { count: 2 } },
-        { use: 'checkDoubleSixOnHighlighted' },
+      effetti: [
+        { usa: 'evidenziaAlti', parametri: { conteggio: 2 } },
+        { usa: 'controllaDoppioSei' },
       ],
     },
     normale: {
       label: 'Normale',
       dice: '2d6',
-      effects: [
-        { use: 'highlightAll' },
-        { use: 'checkDoubleSixOnHighlighted' },
+      effetti: [
+        { usa: 'evidenziaTutti' },
+        { usa: 'controllaDoppioSei' },
       ],
     },
     difficile: {
       label: 'Difficile',
       dice: '3d6',
-      effects: [
-        { use: 'highlightLowest', params: { count: 2 } },
-        { use: 'checkDoubleSixOnHighlighted' },
+      effetti: [
+        { usa: 'evidenziaBassi', parametri: { conteggio: 2 } },
+        { usa: 'controllaDoppioSei' },
       ],
     },
     difficilissimo: {
       label: 'Difficilissimo',
       dice: '4d6',
-      effects: [
-        { use: 'highlightLowest', params: { count: 2 } },
-        { use: 'checkDoubleSixOnHighlighted' },
+      effetti: [
+        { usa: 'evidenziaBassi', parametri: { conteggio: 2 } },
+        { usa: 'controllaDoppioSei' },
       ],
     },
   },
-  globalEffects: [],
+  effettiGlobali: [],
 };

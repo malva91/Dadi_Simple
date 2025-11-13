@@ -82,6 +82,8 @@ class TavernaDeiCaniDiOdino {
     // GdR
     this.activeGameId = null;
     this.activePresetId = null;
+    this.globalEffectsEnabled = true;
+    this.adminSettingsRef = null;
 
     // UI
     this.initializeElements();
@@ -168,10 +170,12 @@ class TavernaDeiCaniDiOdino {
       if (this.diceResultsRef) this.diceResultsRef.off();
       if (this.chatRef) this.chatRef.off();
       if (this._connectedRef) this._connectedRef.off();
+      if (this.adminSettingsRef) this.adminSettingsRef.off();
       if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
     } catch {}
     this.heartbeatInterval = null;
     this._connectedRef = null;
+    this.adminSettingsRef = null;
   }
 
   async joinRoom() {
@@ -236,6 +240,7 @@ class TavernaDeiCaniDiOdino {
 
       // Listener e presenza
       this.setupFirebaseListeners();
+      this.setupAdminSettingsListener();
 
       // UI
       this.showGameScreen();
@@ -516,31 +521,46 @@ class TavernaDeiCaniDiOdino {
             type: 'custom',
             customType: type,
             displayName: cfg.displayName ?? type,
-            emoji: cfg.emoji ?? ''
+            emoji: cfg.emoji ?? '',
+            highlight: false
           });
         } else {
           sides = parseInt(type, 10);
           if (!Number.isInteger(sides) || sides < 2 || sides > 10000) continue;
           value = cryptoIntRange(1, sides);
-          results.push({ sides, color, value, type: 'numeric' });
+          results.push({ sides, color, value, type: 'numeric', highlight: false });
         }
       }
     });
 
     if (!results.length || !this.currentUser) return;
 
-    const diceResult = {
-      playerName: this.currentUser.name,
-      playerId: this.currentUser.id,
-      results,
-      timestamp: firebase.database.ServerValue.TIMESTAMP,
-      color: this.currentUser.color
-    };
+    // Applica regole globali se attive
+    if (this.activeGameId) {
+      const roll = {
+        gameId: this.activeGameId,
+        dice: results,
+        tags: [],
+        messages: []
+      };
 
-    try {
-      await this.diceResultsRef.push(diceResult);
-    } catch (e) {
-      console.error('Errore push risultati:', e);
+      applyGameRules(this.activeGameId, roll, this.globalEffectsEnabled);
+
+      await this.sendDiceResult(roll.dice, roll.messages);
+    } else {
+      const diceResult = {
+        playerName: this.currentUser.name,
+        playerId: this.currentUser.id,
+        results,
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        color: this.currentUser.color
+      };
+
+      try {
+        await this.diceResultsRef.push(diceResult);
+      } catch (e) {
+        console.error('Errore push risultati:', e);
+      }
     }
   }
 
@@ -636,6 +656,25 @@ class TavernaDeiCaniDiOdino {
     this.diceResults.innerHTML = '';
   }
 
+  setupAdminSettingsListener() {
+    this.adminSettingsRef = this.database.ref(`admin/gameSettings/${APP_CONFIG.ROOM_NAME}`);
+    this.adminSettingsRef.on('value', (snapshot) => {
+      const settings = snapshot.val();
+      if (settings) {
+        const newGameId = settings.selectedGameId || null;
+        const newGlobalEnabled = settings.globalEffectsEnabled !== false;
+
+        if (newGameId !== this.activeGameId) {
+          this.activeGameId = newGameId;
+          this.gameSelect.value = newGameId || '';
+          this.selectGame(newGameId);
+        }
+
+        this.globalEffectsEnabled = newGlobalEnabled;
+      }
+    });
+  }
+
   initializeGdRSelector() {
     const games = getAvailableGames();
     this.gameSelect.innerHTML = '<option value="">Nessun GdR</option>';
@@ -645,7 +684,8 @@ class TavernaDeiCaniDiOdino {
       opt.textContent = game.name;
       this.gameSelect.appendChild(opt);
     });
-    this.gameSelect.addEventListener('change', (e) => this.selectGame(e.target.value));
+    this.gameSelect.value = this.activeGameId || '';
+    this.gameSelect.setAttribute('disabled', 'disabled');
   }
 
   selectGame(gameId) {
@@ -687,7 +727,7 @@ class TavernaDeiCaniDiOdino {
       messages: [],
     };
 
-    applyGameRules(gameId, roll);
+    applyGameRules(gameId, roll, this.globalEffectsEnabled);
 
     const results = roll.dice.map(d => ({
       sides: d.sides,

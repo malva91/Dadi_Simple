@@ -1,15 +1,9 @@
 export const dnd = {
   id: 'dnd5e',
   name: 'Dungeons & Dragons 5e',
-  presets: {
-    d20: {
-      label: 'Tiro D20',
-      dice: '1d20',
-      effects: [
-        { use: 'critOn', params: { value: 20, message: '🎲 Successo Critico!' } },
-        { use: 'fumbleOn', params: { value: 1, message: '🎲 Fallimento Critico!' } },
-      ],
-    },
-  },
-  globalEffects: [],
+  presets: {},
+  effettiGlobali: [
+    { usa: 'criticoSu', parametri: { valore: 20, messaggio: 'Successo Critico!', soloPer: 'd20' } },
+    { usa: 'fallimentoSu', parametri: { valore: 1, messaggio: 'Fallimento Critico!', soloPer: 'd20' } },
+  ],
 };

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pannello Admin - Taverna dei Cani di Odino</title>
+    <link rel="stylesheet" href="style.css?v.1.4">
+    <style>
+        .admin-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: rgba(46, 52, 64, 0.95);
+            border-radius: var(--radius);
+            border: 1px solid rgba(94, 129, 172, 0.3);
+        }
+
+        .admin-title {
+            font-family: var(--font-runic);
+            color: var(--ice-blue);
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .setting-group {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: rgba(26, 35, 50, 0.9);
+            border-radius: var(--radius);
+            border: 1px solid var(--steel-blue);
+        }
+
+        .setting-group h3 {
+            color: var(--ice-blue);
+            margin-bottom: 1rem;
+        }
+
+        .setting-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--silver);
+        }
+
+        .setting-group select {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--midnight-blue);
+            color: var(--frost-white);
+            border: 1px solid var(--steel-blue);
+            border-radius: var(--radius);
+            font-size: 1rem;
+        }
+
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .toggle-switch input[type="checkbox"] {
+            width: 50px;
+            height: 25px;
+            cursor: pointer;
+        }
+
+        .save-btn {
+            width: 100%;
+            padding: 1rem;
+            background: var(--steel-blue);
+            color: var(--frost-white);
+            border: none;
+            border-radius: var(--radius);
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .save-btn:hover {
+            background: #6e8bb5;
+            transform: translateY(-2px);
+        }
+
+        .status-message {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: var(--radius);
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .status-message.success {
+            background: rgba(163, 190, 140, 0.3);
+            color: #a3be8c;
+            border: 1px solid #a3be8c;
+        }
+
+        .status-message.error {
+            background: rgba(191, 97, 106, 0.3);
+            color: #bf616a;
+            border: 1px solid #bf616a;
+        }
+
+        .current-settings {
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: var(--radius);
+            margin-top: 1rem;
+            color: var(--silver);
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <h1 class="admin-title">Pannello Amministrazione</h1>
+
+        <div id="statusMessage"></div>
+
+        <div class="setting-group">
+            <h3>Sistema di Gioco</h3>
+            <label for="gameSelect">Seleziona il sistema di gioco attivo per la stanza:</label>
+            <select id="gameSelect">
+                <option value="">Nessun GdR</option>
+            </select>
+
+            <div class="toggle-switch">
+                <label for="globalEffectsToggle">Abilita Effetti Globali:</label>
+                <input type="checkbox" id="globalEffectsToggle" checked>
+            </div>
+
+            <div class="current-settings">
+                <strong>Impostazioni Correnti:</strong>
+                <div id="currentSettings">Caricamento...</div>
+            </div>
+        </div>
+
+        <button id="saveBtn" class="save-btn">Salva Impostazioni</button>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="firebase-config.js?v.1.4"></script>
+    <script src="config.js?v.1.4"></script>
+    <script type="module">
+        import { getAvailableGames } from './gdr/index.js';
+
+        const ROOM_NAME = APP_CONFIG.ROOM_NAME;
+        const database = window.database;
+
+        const gameSelect = document.getElementById('gameSelect');
+        const globalEffectsToggle = document.getElementById('globalEffectsToggle');
+        const saveBtn = document.getElementById('saveBtn');
+        const statusMessage = document.getElementById('statusMessage');
+        const currentSettings = document.getElementById('currentSettings');
+
+        function showStatus(message, isError = false) {
+            statusMessage.className = `status-message ${isError ? 'error' : 'success'}`;
+            statusMessage.textContent = message;
+            setTimeout(() => {
+                statusMessage.textContent = '';
+                statusMessage.className = '';
+            }, 3000);
+        }
+
+        function initGameSelect() {
+            const games = getAvailableGames();
+            gameSelect.innerHTML = '<option value="">Nessun GdR</option>';
+            games.forEach(game => {
+                const opt = document.createElement('option');
+                opt.value = game.id;
+                opt.textContent = game.name;
+                gameSelect.appendChild(opt);
+            });
+        }
+
+        async function loadCurrentSettings() {
+            try {
+                const ref = database.ref(`admin/gameSettings/${ROOM_NAME}`);
+                const snapshot = await ref.once('value');
+                const settings = snapshot.val();
+
+                if (settings) {
+                    gameSelect.value = settings.selectedGameId || '';
+                    globalEffectsToggle.checked = settings.globalEffectsEnabled !== false;
+
+                    currentSettings.innerHTML = `
+                        <div>Gioco: ${settings.selectedGameId || 'Nessuno'}</div>
+                        <div>Effetti Globali: ${settings.globalEffectsEnabled !== false ? 'Abilitati' : 'Disabilitati'}</div>
+                        <div>Ultimo aggiornamento: ${settings.updatedAt ? new Date(settings.updatedAt).toLocaleString('it-IT') : 'N/A'}</div>
+                    `;
+                } else {
+                    currentSettings.textContent = 'Nessuna impostazione salvata';
+                }
+            } catch (error) {
+                console.error('Errore caricamento impostazioni:', error);
+                currentSettings.textContent = 'Errore caricamento';
+            }
+        }
+
+        async function saveSettings() {
+            try {
+                const settings = {
+                    selectedGameId: gameSelect.value,
+                    globalEffectsEnabled: globalEffectsToggle.checked,
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
+                };
+
+                const ref = database.ref(`admin/gameSettings/${ROOM_NAME}`);
+                await ref.set(settings);
+
+                showStatus('Impostazioni salvate con successo!');
+                await loadCurrentSettings();
+            } catch (error) {
+                console.error('Errore salvataggio:', error);
+                showStatus('Errore durante il salvataggio', true);
+            }
+        }
+
+        saveBtn.addEventListener('click', saveSettings);
+
+        initGameSelect();
+        loadCurrentSettings();
+    </script>
+</body>
+</html>

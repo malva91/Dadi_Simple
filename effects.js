@@ -1,65 +1,65 @@
 export const effects = {
-  highlightHighest(roll, { count = 1 } = {}) {
-    const sorted = roll.dice
+  evidenziaAlti(roll, { conteggio = 1 } = {}) {
+    const ordinati = roll.dice
       .map((d, i) => ({ d, i }))
       .sort((a, b) => b.d.value - a.d.value);
-    sorted.slice(0, count).forEach(({ i }) => {
+    ordinati.slice(0, conteggio).forEach(({ i }) => {
       roll.dice[i].highlight = true;
     });
     return roll;
   },
 
-  highlightLowest(roll, { count = 1 } = {}) {
-    const sorted = roll.dice
+  evidenziaBassi(roll, { conteggio = 1 } = {}) {
+    const ordinati = roll.dice
       .map((d, i) => ({ d, i }))
       .sort((a, b) => a.d.value - b.d.value);
-    sorted.slice(0, count).forEach(({ i }) => {
+    ordinati.slice(0, conteggio).forEach(({ i }) => {
       roll.dice[i].highlight = true;
     });
     return roll;
   },
 
-  highlightAll(roll) {
+  evidenziaTutti(roll) {
     roll.dice.forEach(d => {
       d.highlight = true;
     });
     return roll;
   },
 
-  checkDoubleSixOnHighlighted(roll) {
-    const highlighted = roll.dice.filter(d => d.highlight && d.value === 6);
-    if (highlighted.length >= 2) {
+  controllaDoppioSei(roll) {
+    const evidenziati = roll.dice.filter(d => d.highlight && d.value === 6);
+    if (evidenziati.length >= 2) {
       if (!roll.tags.includes('successo_critico')) {
         roll.tags.push('successo_critico');
-        roll.messages.push('🎲 Doppio 6 sui risultati evidenziati: Successo Critico!');
+        roll.messages.push('Doppio 6 sui risultati evidenziati: Successo Critico!');
       }
     }
     return roll;
   },
 
-  critOn(roll, { value = 20, message = 'Successo critico!', onlyFor = null } = {}) {
-    const matching = roll.dice.filter(d => {
-      if (onlyFor && d.sides !== parseInt(onlyFor.replace('d', ''), 10)) return false;
-      return d.value === value;
+  criticoSu(roll, { valore = 20, messaggio = 'Successo critico!', soloPer = null } = {}) {
+    const corrispondenti = roll.dice.filter(d => {
+      if (soloPer && d.sides !== parseInt(soloPer.replace('d', ''), 10)) return false;
+      return d.value === valore;
     });
-    if (matching.length > 0) {
+    if (corrispondenti.length > 0) {
       if (!roll.tags.includes('successo_critico')) {
         roll.tags.push('successo_critico');
-        roll.messages.push(message);
+        roll.messages.push(messaggio);
       }
     }
     return roll;
   },
 
-  fumbleOn(roll, { value = 1, message = 'Fallimento critico!', onlyFor = null } = {}) {
-    const matching = roll.dice.filter(d => {
-      if (onlyFor && d.sides !== parseInt(onlyFor.replace('d', ''), 10)) return false;
-      return d.value === value;
+  fallimentoSu(roll, { valore = 1, messaggio = 'Fallimento critico!', soloPer = null } = {}) {
+    const corrispondenti = roll.dice.filter(d => {
+      if (soloPer && d.sides !== parseInt(soloPer.replace('d', ''), 10)) return false;
+      return d.value === valore;
     });
-    if (matching.length > 0) {
+    if (corrispondenti.length > 0) {
       if (!roll.tags.includes('fallimento_critico')) {
         roll.tags.push('fallimento_critico');
-        roll.messages.push(message);
+        roll.messages.push(messaggio);
       }
     }
     return roll;
