@@ -43,6 +43,10 @@ function debounce(fn, wait = 250) {
   };
 }
 
+// Import moduli GdR
+import { getAvailableGames, getGameById } from './gdr/index.js';
+import { applyGameRules } from './gameRulesEngine.js';
+
 // Verifica config essenziale
 (function assertConfig() {
   if (!window.APP_CONFIG) throw new Error("APP_CONFIG mancante (carica config.js prima di main.js)");
@@ -75,9 +79,14 @@ class TavernaDeiCaniDiOdino {
     this.maxDicePerRow = 10;
     this.maxRows = 20;
 
+    // GdR
+    this.activeGameId = null;
+    this.activePresetId = null;
+
     // UI
     this.initializeElements();
     this.bindEvents();
+    this.initializeGdRSelector();
 
     // Blocca/valorizza campo stanza
     this.roomCodeInput.value = APP_CONFIG.ROOM_NAME;
@@ -115,6 +124,10 @@ class TavernaDeiCaniDiOdino {
     this.rollDiceBtn = document.getElementById('rollDice');
     this.chatInput = document.getElementById('chatInput');
     this.sendMessageBtn = document.getElementById('sendMessage');
+
+    // GdR
+    this.gameSelect = document.getElementById('gameSelect');
+    this.presetButtons = document.getElementById('presetButtons');
   }
 
   bindEvents() {
@@ -338,15 +351,24 @@ class TavernaDeiCaniDiOdino {
     (result.results || []).forEach(dice => {
       const colorEmoji = this.getColorEmoji(dice.color);
       const safeEmoji = safe(colorEmoji);
+      const highlight = dice.highlight ? ' style="background-color:rgba(255,215,0,0.5); padding:2px 4px; border-radius:3px;"' : '';
       if (dice.type === 'custom') {
         const diceEmoji = dice.emoji ? safe(dice.emoji) : '';
-        content += `${safeEmoji}${diceEmoji ? diceEmoji + ' ' : ''}${safe(dice.displayName)} = <strong>${safe(dice.value)}</strong><br>`;
+        content += `<span${highlight}>${safeEmoji}${diceEmoji ? diceEmoji + ' ' : ''}${safe(dice.displayName)} = <strong>${safe(dice.value)}</strong></span><br>`;
       } else {
-        content += `${safeEmoji}🎲 D${safe(dice.sides)} = <strong>${safe(dice.value)}</strong><br>`;
+        content += `<span${highlight}>${safeEmoji}🎲 D${safe(dice.sides)} = <strong>${safe(dice.value)}</strong></span><br>`;
       }
     });
 
     content += `</div>`;
+
+    if (result.messages && result.messages.length > 0) {
+      content += `<div class="gdr-messages" style="margin-top:8px; padding:8px; background:rgba(0,0,0,0.3); border-radius:3px; font-size:0.9em;">`;
+      result.messages.forEach(msg => {
+        content += `<div style="margin:4px 0;">${safe(msg)}</div>`;
+      });
+      content += `</div>`;
+    }
 
     const numericResults = (result.results || []).filter(d => d.type === 'numeric' && Number.isFinite(d.value));
     if (numericResults.length > 0) {
@@ -612,6 +634,93 @@ class TavernaDeiCaniDiOdino {
       this.diceResultsRef.remove().catch(e => console.error('Errore pulizia dadi:', e));
     }
     this.diceResults.innerHTML = '';
+  }
+
+  initializeGdRSelector() {
+    const games = getAvailableGames();
+    this.gameSelect.innerHTML = '<option value="">Nessun GdR</option>';
+    games.forEach(game => {
+      const opt = document.createElement('option');
+      opt.value = game.id;
+      opt.textContent = game.name;
+      this.gameSelect.appendChild(opt);
+    });
+    this.gameSelect.addEventListener('change', (e) => this.selectGame(e.target.value));
+  }
+
+  selectGame(gameId) {
+    this.activeGameId = gameId;
+    this.activePresetId = null;
+    this.presetButtons.innerHTML = '';
+
+    if (!gameId) return;
+
+    const game = getGameById(gameId);
+    if (!game || !game.presets) return;
+
+    Object.entries(game.presets).forEach(([presetId, preset]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'preset-btn';
+      btn.textContent = `${preset.label} (${preset.dice})`;
+      btn.addEventListener('click', () => this.rollPreset(gameId, presetId, preset.dice));
+      this.presetButtons.appendChild(btn);
+    });
+  }
+
+  async rollPreset(gameId, presetId, diceExpression) {
+    const parsed = this.parseDiceExpression(diceExpression);
+    if (!parsed) return;
+
+    const diceResults = [];
+    for (let i = 0; i < parsed.count; i++) {
+      const value = cryptoIntRange(1, parsed.sides);
+      diceResults.push({ sides: parsed.sides, value, type: 'numeric', highlight: false });
+    }
+
+    const roll = {
+      gameId,
+      presetId,
+      diceExpression,
+      dice: diceResults,
+      tags: [],
+      messages: [],
+    };
+
+    applyGameRules(gameId, roll);
+
+    const results = roll.dice.map(d => ({
+      sides: d.sides,
+      value: d.value,
+      type: 'numeric',
+      color: this.diceColors[0]?.value || '#666',
+      highlight: d.highlight,
+    }));
+
+    await this.sendDiceResult(results, roll.messages);
+  }
+
+  parseDiceExpression(expr) {
+    const match = expr.match(/^(\d+)d(\d+)$/);
+    if (!match) return null;
+    return { count: parseInt(match[1], 10), sides: parseInt(match[2], 10) };
+  }
+
+  async sendDiceResult(results, messages = []) {
+    if (!this.diceResultsRef || !this.currentUser) return;
+
+    const resultObj = {
+      playerName: this.currentUser.name,
+      color: this.currentUser.color,
+      results,
+      timestamp: firebase.database.ServerValue.TIMESTAMP,
+    };
+
+    if (messages.length > 0) {
+      resultObj.messages = messages;
+    }
+
+    await this.diceResultsRef.push(resultObj).catch(e => console.error('Errore invio risultato:', e));
   }
 
   // ======= HELPERS =======
