@@ -146,7 +146,7 @@
         import { getAvailableGames } from './gdr/index.js';
 
         const ROOM_NAME = APP_CONFIG.ROOM_NAME;
-        const database = window.database;
+        const database = firebase.database();
 
         const gameSelect = document.getElementById('gameSelect');
         const globalEffectsToggle = document.getElementById('globalEffectsToggle');
